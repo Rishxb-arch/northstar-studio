@@ -1,0 +1,9 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Northstar Studio House professional wordmark</title>
+  <desc id="desc">Minimal Northstar Studio House wordmark with a sharp four-point star mark.</desc>
+  <rect width="1200" height="360" fill="#070807"/>
+  <path d="M160 58L181.12 146.56L270.4 168L181.12 189.44L160 278L138.88 189.44L49.6 168L138.88 146.56L160 58Z" fill="#D7FF57"/>
+  <circle cx="160" cy="168" r="25" fill="#070807" stroke="#F5F1E8" stroke-width="10"/>
+  <text x="335" y="158" fill="#F5F1E8" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="96" font-weight="750" letter-spacing="-7">Northstar</text>
+  <text x="340" y="224" fill="#D7FF57" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="24" font-weight="500" letter-spacing="14">STUDIO HOUSE</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Northstar Studio profile logo v3</title>
+  <desc id="desc">A refined NS monogram with a small north-star accent for Northstar Studio.</desc>
+  <rect width="1080" height="1080" fill="#0A0B0A"/>
+  <rect x="118" y="118" width="844" height="844" fill="#0F100E" stroke="#2D3029" stroke-width="3"/>
+  <text x="540" y="524" fill="#F4EFE6" text-anchor="middle" font-family="Georgia, Times New Roman, serif" font-size="288" font-weight="500" letter-spacing="-18">NS</text>
+  <path d="M540 606L564 688L648 712L564 736L540 818L516 736L432 712L516 688L540 606Z" fill="#D6FF5B"/>
+  <text x="540" y="890" fill="#F4EFE6" text-anchor="middle" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="32" font-weight="600" letter-spacing="17">STUDIO</text>
+</svg>

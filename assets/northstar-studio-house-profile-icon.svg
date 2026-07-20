@@ -1,0 +1,22 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Northstar Studio House profile icon</title>
+  <desc id="desc">Square profile icon with a north star inside a house frame.</desc>
+  <rect width="1080" height="1080" fill="#0A0B0A"/>
+  <defs>
+    <linearGradient id="star" x1="285" y1="225" x2="795" y2="855" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F2EA"/>
+      <stop offset="0.52" stop-color="#D9FF62"/>
+      <stop offset="1" stop-color="#83A334"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="28" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.85 0 0 0 0 1 0 0 0 0 0.38 0 0 0 0.55 0"/>
+      <feBlend in="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+  <path d="M540 156L838 376V832H242V376L540 156Z" stroke="#F4F2EA" stroke-width="32" stroke-linejoin="round"/>
+  <path d="M540 156L838 376V832H242V376L540 156Z" stroke="#D9FF62" stroke-width="7" stroke-linejoin="round" opacity="0.88"/>
+  <path d="M540 277L597 508L813 540L597 572L540 803L483 572L267 540L483 508L540 277Z" fill="url(#star)" filter="url(#glow)"/>
+  <circle cx="540" cy="540" r="47" fill="#0A0B0A" stroke="#F4F2EA" stroke-width="20"/>
+  <path d="M386 741H694" stroke="#F4F2EA" stroke-width="32" stroke-linecap="square"/>
+</svg>

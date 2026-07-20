@@ -1,0 +1,28 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Northstar Studio House monogram logo</title>
+  <desc id="desc">A professional text-only NSH monogram logo for Northstar Studio House.</desc>
+  <rect width="1080" height="1080" fill="#070807"/>
+  <rect x="146" y="146" width="788" height="788" fill="#0F100E" stroke="#2A2D26" stroke-width="4"/>
+  <text x="540" y="520"
+    fill="#F7F2E8"
+    text-anchor="middle"
+    font-family="Avenir Next, Helvetica Neue, Helvetica, Arial, sans-serif"
+    font-size="250"
+    font-weight="850"
+    letter-spacing="-22">NSH</text>
+  <line x1="294" y1="602" x2="786" y2="602" stroke="#D7FF57" stroke-width="8"/>
+  <text x="540" y="681"
+    fill="#D7FF57"
+    text-anchor="middle"
+    font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+    font-size="30"
+    font-weight="600"
+    letter-spacing="15">STUDIO HOUSE</text>
+  <text x="540" y="743"
+    fill="#8F9289"
+    text-anchor="middle"
+    font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+    font-size="18"
+    font-weight="500"
+    letter-spacing="8">NORTHSTAR</text>
+</svg>
