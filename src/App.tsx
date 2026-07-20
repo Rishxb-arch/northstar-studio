@@ -190,6 +190,9 @@ function App() {
   const [activeIdea, setActiveIdea] = useState(0)
   const [shotListOpen, setShotListOpen] = useState(false)
   const [applicationSent, setApplicationSent] = useState(false)
+  const [applicationError, setApplicationError] = useState('')
+  const [applicationDuplicate, setApplicationDuplicate] = useState(false)
+  const [applicationSubmitting, setApplicationSubmitting] = useState(false)
   const [leadCount, setLeadCount] = useState(readLeadCount)
 
   const updateInput = (field: keyof CreatorInputs, value: string) => setInputs((current) => ({ ...current, [field]: value }))
@@ -220,17 +223,47 @@ function App() {
     setShotListOpen(false)
   }
 
-  const submitApplication = (event: FormEvent<HTMLFormElement>) => {
+  const submitApplication = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    setApplicationError('')
+    setApplicationSubmitting(true)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
+    const lead = {
+      name: String(form.get('name') || ''),
+      handle: String(form.get('handle') || ''),
+      email: String(form.get('email') || ''),
+      niche: String(form.get('niche') || ''),
+      platform: String(form.get('platform') || 'Instagram/TikTok'),
+      submittedAt: new Date().toISOString(),
+    }
+
+    try {
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lead),
+      })
+      const result = await response.json() as { ok?: boolean; duplicate?: boolean; error?: string }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Could not save application')
+      }
+
+      setApplicationDuplicate(Boolean(result.duplicate))
+    } catch (error) {
+      setApplicationError(error instanceof Error ? error.message : 'Could not save application')
+      setApplicationSubmitting(false)
+      return
+    }
+
     const leads = readLeads()
-    leads.push({
-      name: String(form.get('name') || ''), handle: String(form.get('handle') || ''),
-      email: String(form.get('email') || ''), niche: String(form.get('niche') || ''), submittedAt: new Date().toISOString(),
-    })
+    leads.push(lead)
     localStorage.setItem(LEADS_KEY, JSON.stringify(leads))
     setLeadCount(leads.length)
     setApplicationSent(true)
+    setApplicationSubmitting(false)
+    formElement.reset()
   }
 
   const idea = workspace?.ideas[activeIdea]
@@ -299,7 +332,7 @@ function App() {
           <section className="workflow section-pad"><div className="section-heading compact"><div><p className="kicker">06 / WEEKLY SPRINT</p><h2>A week built around<br />your creator brain.</h2></div><p>A Monday–Friday execution plan generated from your niche, platform, style, and monetization goal.</p></div><div className="week-grid">{workspace.sprint.map((day, index) => <article key={day.day} className={index === 0 ? 'day active' : 'day'}><span>{day.day}</span><div className="day-icon">{index === 0 ? <Radar /> : index === 1 ? <WandSparkles /> : index === 2 ? <CalendarDays /> : index === 3 ? <Heart /> : <TrendingUp />}</div><h3>{day.focus}</h3><p>{day.task}</p>{index === 0 && <small>START HERE</small>}</article>)}</div></section>
         </>}
 
-        <section className="beta" id="beta"><div className="beta-glow"></div><p className="kicker">PRIVATE BETA / 4-WEEK SPRINT</p><h2>Your next level isn’t<br />more hustle. <em>It’s leverage.</em></h2><p>Join a small cohort of creators building the future of agentic management. This local demo saves applications in your browser.</p>{applicationSent ? <div className="success" role="status"><Check /> Application saved locally. You’re lead #{leadCount}.</div> : <form className="beta-form" onSubmit={submitApplication}><div className="form-grid"><label><span>Name</span><input name="name" type="text" autoComplete="name" placeholder="Amara Singh" required /></label><label><span>Creator handle</span><input name="handle" type="text" autoComplete="username" placeholder="@amaraglow" required /></label><label><span>Email</span><input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label><label><span>Content niche</span><input name="niche" type="text" placeholder="Beauty & skincare" required /></label></div><button className="button primary beta-button" type="submit">Save beta application <ArrowUpRight size={18} /></button></form>}<div className="beta-details"><span>✓ No credit card</span><span>✓ Saved on this device</span><span className="lead-count">{leadCount} saved {leadCount === 1 ? 'lead' : 'leads'}</span></div></section>
+        <section className="beta" id="beta"><div className="beta-glow"></div><p className="kicker">PRIVATE BETA / 4-WEEK SPRINT</p><h2>Your next level isn’t<br />more hustle. <em>It’s leverage.</em></h2><p>Join a small cohort of Instagram/TikTok creators testing Northstar Studio. Applications now save to the real waitlist database.</p>{applicationSent ? <div className="success" role="status"><Check /> {applicationDuplicate ? 'You’re already on the waitlist.' : `Application saved. You’re local lead #${leadCount}.`}</div> : <form className="beta-form" onSubmit={submitApplication}><div className="form-grid"><label><span>Name</span><input name="name" type="text" autoComplete="name" placeholder="Amara Singh" required /></label><label><span>Creator handle</span><input name="handle" type="text" autoComplete="username" placeholder="@amaraglow" /></label><label><span>Email</span><input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label><label><span>Content niche</span><input name="niche" type="text" placeholder="Beauty & skincare" required /></label><label className="span-two"><span>Primary platform</span><select name="platform" defaultValue="Instagram/TikTok"><option>Instagram</option><option>TikTok</option><option>Instagram/TikTok</option><option>YouTube Shorts</option></select></label></div>{applicationError && <div className="form-error" role="alert">{applicationError}</div>}<button className="button primary beta-button" type="submit" disabled={applicationSubmitting}>{applicationSubmitting ? 'Saving…' : 'Join the beta waitlist'} <ArrowUpRight size={18} /></button></form>}<div className="beta-details"><span>✓ No credit card</span><span>✓ Saved to Supabase waitlist</span><span className="lead-count">{leadCount} local {leadCount === 1 ? 'submission' : 'submissions'}</span></div></section>
       </main>
       <footer><a className="brand" href="#top"><span className="brand-mark"><Sparkles size={14} /></span><span>Northstar<span className="brand-muted"> Studio</span></span></a><p>Built for creators who think like founders.</p><span>© 2026 NORTHSTAR STUDIO</span></footer>
     </div>
