@@ -304,11 +304,14 @@ function App() {
             <h2>From scattered ideas to a shoot-ready plan.</h2>
             <p>Northstar Studio gives creators the management layer they usually cannot hire yet: positioning, trend direction, production briefs, and a weekly sprint.</p>
           </div>
-          <div className="studio-stage apple-product-stage" aria-hidden="true">
-            <div className="device-lid"><span>Northstar</span></div>
-            <div className="device-base"></div>
-            <div className="device-card card-one"><small>TREND</small><strong>Beauty reset</strong><span>+218%</span></div>
-            <div className="device-card card-two"><small>BRIEF</small><strong>Hook + shot list</strong><span>93</span></div>
+          <div className="studio-stage signal-theatre" aria-hidden="true">
+            <div className="theatre-glow"></div>
+            <div className="orbit-line orbit-a"></div>
+            <div className="orbit-line orbit-b"></div>
+            <div className="signal-core"><span>NS</span><strong>Creator week</strong><small>10 briefs · 3 signals · 5-day sprint</small></div>
+            <div className="signal-card card-trend"><small>TREND</small><strong>Beauty reset</strong><span>+218%</span></div>
+            <div className="signal-card card-brief"><small>BRIEF</small><strong>Hook + shot list</strong><span>93</span></div>
+            <div className="signal-card card-brand"><small>BRAND FIT</small><strong>SPF Collective</strong><span>89%</span></div>
           </div>
         </section>
 
