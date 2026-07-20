@@ -53,6 +53,7 @@ type CreatorWorkspace = {
 
 const WORKSPACE_KEY = 'agentic.creator.workspace.v1'
 const LEADS_KEY = 'agentic.creator.betaLeads.v1'
+const ACCESS_KEY = 'northstar.workspace.access.v1'
 
 const blankInputs: CreatorInputs = {
   handle: '', niche: '', platform: 'Instagram', competitors: '', monetizationGoal: '', brandCategories: '', contentStyle: '',
@@ -184,6 +185,26 @@ function readLeads() {
 
 const readLeadCount = () => readLeads().length
 
+const readAccessKey = () => {
+  let key = localStorage.getItem(ACCESS_KEY)
+  if (!key) {
+    key = `ns-${crypto.randomUUID()}`
+    localStorage.setItem(ACCESS_KEY, key)
+  }
+  return key
+}
+
+const workspaceRequest = async <T,>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> => {
+  const response = await fetch('/api/workspaces', {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-northstar-user': readAccessKey() },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const result = await response.json() as T & { ok?: boolean; error?: string }
+  if (!response.ok || result.ok === false) throw new Error(result.error || 'Workspace request failed')
+  return result
+}
+
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [inputs, setInputs] = useState<CreatorInputs>(blankInputs)
@@ -197,32 +218,61 @@ function App() {
   const [leadCount, setLeadCount] = useState(readLeadCount)
   const [taskStatusOverrides, setTaskStatusOverrides] = useState<Record<string, SprintStatus>>({})
   const [briefCopied, setBriefCopied] = useState(false)
+  const [workspaceError, setWorkspaceError] = useState('')
+  const [workspaceSaving, setWorkspaceSaving] = useState(false)
+  const [workspacePersisted, setWorkspacePersisted] = useState(false)
 
   const updateInput = (field: keyof CreatorInputs, value: string) => setInputs((current) => ({ ...current, [field]: value }))
 
-  const createBrain = (event?: FormEvent<HTMLFormElement>) => {
+  const createBrain = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
-    const next = generateWorkspace(inputs)
+    setWorkspaceSaving(true)
+    setWorkspaceError('')
+    let next = generateWorkspace(inputs)
+    try {
+      const result = await workspaceRequest<{ persisted: boolean; workspace: { workspace: CreatorWorkspace; taskStatusOverrides?: Record<string, SprintStatus>; activeIdea?: number } }>('POST', { inputs })
+      next = result.workspace.workspace
+      setTaskStatusOverrides(result.workspace.taskStatusOverrides || {})
+      setActiveIdea(result.workspace.activeIdea || 0)
+      setWorkspacePersisted(result.persisted)
+    } catch (error) {
+      setTaskStatusOverrides({})
+      setActiveIdea(0)
+      setWorkspacePersisted(false)
+      setWorkspaceError(error instanceof Error ? `${error.message}. Using local workspace until backend is configured.` : 'Using local workspace until backend is configured.')
+    }
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify(next))
     setWorkspace(next)
-    setActiveIdea(0)
     setShotListOpen(false)
-    setTaskStatusOverrides({})
     setBriefCopied(false)
+    setWorkspaceSaving(false)
     requestAnimationFrame(() => document.getElementById('intelligence')?.scrollIntoView({ behavior: 'smooth' }))
   }
 
-  const loadSample = () => {
-    const next = generateWorkspace(sampleInputs)
+  const loadSample = async () => {
+    setWorkspaceSaving(true)
+    setWorkspaceError('')
+    let next = generateWorkspace(sampleInputs)
+    try {
+      const result = await workspaceRequest<{ persisted: boolean; workspace: { workspace: CreatorWorkspace; taskStatusOverrides?: Record<string, SprintStatus>; activeIdea?: number } }>('POST', { inputs: sampleInputs })
+      next = result.workspace.workspace
+      setTaskStatusOverrides(result.workspace.taskStatusOverrides || {})
+      setActiveIdea(result.workspace.activeIdea || 0)
+      setWorkspacePersisted(result.persisted)
+    } catch (error) {
+      setTaskStatusOverrides({})
+      setActiveIdea(0)
+      setWorkspacePersisted(false)
+      setWorkspaceError(error instanceof Error ? `${error.message}. Using local sample workspace.` : 'Using local sample workspace.')
+    }
     setInputs(sampleInputs)
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify(next))
     setWorkspace(next)
-    setActiveIdea(0)
-    setTaskStatusOverrides({})
     setBriefCopied(false)
+    setWorkspaceSaving(false)
   }
 
-  const resetWorkspace = () => {
+  const resetWorkspace = async () => {
     localStorage.removeItem(WORKSPACE_KEY)
     setInputs(blankInputs)
     setWorkspace(null)
@@ -230,6 +280,8 @@ function App() {
     setShotListOpen(false)
     setTaskStatusOverrides({})
     setBriefCopied(false)
+    setWorkspacePersisted(false)
+    try { await workspaceRequest('DELETE') } catch { /* local reset should still work */ }
   }
 
   const submitApplication = async (event: FormEvent<HTMLFormElement>) => {
@@ -282,12 +334,26 @@ function App() {
   ) : null
 
   const toggleSprintTask = (taskId: string, nextStatus: SprintStatus) => {
-    setTaskStatusOverrides((current) => ({ ...current, [taskId]: nextStatus }))
+    setTaskStatusOverrides((current) => {
+      const next = { ...current, [taskId]: nextStatus }
+      workspaceRequest('PATCH', { workspace, taskStatusOverrides: next, activeIdea })
+        .then((result: unknown) => setWorkspacePersisted(Boolean((result as { persisted?: boolean }).persisted)))
+        .catch(() => setWorkspacePersisted(false))
+      return next
+    })
   }
 
   const copyCurrentBrief = async () => {
     if (!workspace || !productionPlan) return
-    const exportText = buildBriefExport(workspace, productionPlan)
+    let exportText = buildBriefExport(workspace, productionPlan)
+    try {
+      const result = await fetch('/api/briefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace, activeIdea, taskStatusOverrides }),
+      }).then((response) => response.json() as Promise<{ ok?: boolean; markdown?: string }>)
+      if (result.ok && result.markdown) exportText = result.markdown
+    } catch { /* local export stays available */ }
     try {
       await navigator.clipboard.writeText(exportText)
     } catch {
@@ -331,7 +397,7 @@ function App() {
             <div className="profile-row"><div className="profile-art">{workspace ? cleanHandle(workspace.brain.creator).slice(0, 2).toUpperCase() : 'YOU'}<span className="online"></span></div><div><h3>{workspace?.brain.creator || 'Your creator brain'}</h3><p>{workspace?.brain.niche || 'Ready for onboarding'}</p></div><div className="growth"><span>IDEAS READY</span><strong>{workspace?.ideas.length || 0}</strong></div></div>
             <div className="mission-card"><div className="mini-label"><Target size={14} /> TODAY’S HIGHEST-LEVERAGE MOVE</div><p>{workspace ? workspace.sprint[0].task : 'Complete the seven-field onboarding to generate your strategy workspace.'}</p><button onClick={() => document.getElementById(workspace ? 'planner' : 'workspace')?.scrollIntoView({ behavior: 'smooth' })}>{workspace ? 'Open briefs' : 'Start setup'} <ChevronRight size={15} /></button></div>
             <div className="metric-row"><div><span>TRENDS</span><strong>{workspace?.trends.length || '—'}</strong><small>scouted</small></div><div><span>IDEAS</span><strong>{workspace?.ideas.length || '—'}</strong><small>scored</small></div><div><span>DEAL FITS</span><strong>{workspace?.deals.length || '—'}</strong><small>matched</small></div></div>
-            <div className="signal-strip"><Database size={15} /><span>Privacy</span> {workspace ? 'Workspace saved on this device.' : 'Your workspace stays private on this device.'}</div>
+            <div className="signal-strip"><Database size={15} /><span>{workspacePersisted ? 'Backend synced' : 'Local fallback'}</span> {workspace ? (workspacePersisted ? 'Workspace persisted through the API.' : 'Workspace saved locally until Supabase is configured.') : 'Your workspace starts private on this device.'}</div>
           </div>
         </section>
 
@@ -353,7 +419,7 @@ function App() {
         </section>
 
         <section className="onboarding section-pad" id="workspace">
-          <div className="workspace-intro"><div><p className="kicker">00 / CREATOR ONBOARDING</p><h2>Give Northstar<br />your point of view.</h2></div><div><p>Seven inputs become a starter strategy workspace—no account, API key, or backend required.</p><div className="workspace-actions"><button className="button outline" type="button" onClick={loadSample}><Sparkles size={16} /> Load sample</button><button className="button ghost" type="button" onClick={resetWorkspace}><RotateCcw size={15} /> Reset</button></div></div></div>
+          <div className="workspace-intro"><div><p className="kicker">00 / CREATOR ONBOARDING</p><h2>Give Northstar<br />your point of view.</h2></div><div><p>Seven inputs are sent through the workspace API, persisted when Supabase is configured, and mirrored locally for a smooth beta.</p><div className="workspace-actions"><button className="button outline" type="button" onClick={loadSample} disabled={workspaceSaving}><Sparkles size={16} /> {workspaceSaving ? 'Syncing…' : 'Load sample'}</button><button className="button ghost" type="button" onClick={resetWorkspace}><RotateCcw size={15} /> Reset</button></div></div></div>
           <form className="creator-form" onSubmit={createBrain}>
             <label><span>Creator handle</span><input value={inputs.handle} onChange={(e) => updateInput('handle', e.target.value)} placeholder="@yourhandle" required /></label>
             <label><span>Niche</span><input value={inputs.niche} onChange={(e) => updateInput('niche', e.target.value)} placeholder="Beauty & skincare" required /></label>
@@ -362,11 +428,12 @@ function App() {
             <label><span>Monetization goal</span><input value={inputs.monetizationGoal} onChange={(e) => updateInput('monetizationGoal', e.target.value)} placeholder="$10k/month from brand deals" required /></label>
             <label><span>Brand categories</span><input value={inputs.brandCategories} onChange={(e) => updateInput('brandCategories', e.target.value)} placeholder="Skincare, wellness, beauty tech" required /></label>
             <label className="span-two"><span>Content style</span><textarea value={inputs.contentStyle} onChange={(e) => updateInput('contentStyle', e.target.value)} placeholder="Warm authority, quick demos, honest reviews" required /></label>
-            <div className="form-submit span-two"><span><Database size={14} /> Saved privately on this device</span><button className="button primary" type="submit">Generate creator workspace <ArrowUpRight size={18} /></button></div>
+            <div className="form-submit span-two"><span><Database size={14} /> {workspacePersisted ? 'Synced through workspace API' : 'Local fallback enabled'}</span><button className="button primary" type="submit" disabled={workspaceSaving}>{workspaceSaving ? 'Generating…' : 'Generate creator workspace'} <ArrowUpRight size={18} /></button></div>
+            {workspaceError && <div className="form-error span-two" role="alert">{workspaceError}</div>}
           </form>
         </section>
 
-        {!workspace ? <section className="empty-state section-pad"><BrainCircuit /><p className="kicker">WORKSPACE WAITING</p><h2>Your strategy workspace will appear here.</h2><p>Complete onboarding or load the sample creator to unlock the product preview.</p><button className="button primary" onClick={loadSample}>Explore with sample data <ArrowUpRight size={17} /></button></section> : <>
+        {!workspace ? <section className="empty-state section-pad"><BrainCircuit /><p className="kicker">WORKSPACE WAITING</p><h2>Your strategy workspace will appear here.</h2><p>Complete onboarding or load the sample creator to unlock the product preview.</p><button className="button primary" onClick={loadSample} disabled={workspaceSaving}>{workspaceSaving ? 'Syncing sample…' : 'Explore with sample data'} <ArrowUpRight size={17} /></button></section> : <>
           <section className="intelligence section-pad" id="intelligence">
             <div className="section-heading"><div><p className="kicker">01 / CREATOR PROFILE</p><h2>Your positioning,<br />turned into direction.</h2></div><p>A customer-facing strategy card that shows what Northstar understands about the creator—without exposing internal system data.</p></div>
             <div className="brain-grid output-brain-grid">
@@ -377,7 +444,7 @@ function App() {
 
           <section className="radar section-pad"><div className="section-heading compact"><div><p className="kicker">02 / COMPETITOR RADAR</p><h2>Know the field.<br />Own the gap.</h2></div><p>Opportunity analysis based on the handles you supplied.</p></div><div className="competitor-grid">{workspace.competitors.map((person, index) => <article className="competitor" key={person.handle}><span className="index">0{index + 1}</span><div className="competitor-avatar">{cleanHandle(person.handle).slice(0, 2).toUpperCase()}</div><div><h3>{person.handle}</h3><p>{workspace.brain.niche}</p></div><div className="growth-cell"><small>30D GROWTH SIGNAL</small><strong>{person.growth}</strong></div><div className="gap"><Search size={14} /><span>Content gap</span><strong>{person.gap}</strong></div></article>)}</div></section>
 
-          <section className="planner section-pad" id="planner"><div className="section-heading light"><div><p className="kicker">03 / VIDEO PLANNER</p><h2>From idea<br />to shoot plan.</h2></div><p>Choose a direction. Northstar gives the opening hook, the beats to film, the shot list, and a simple confidence signal.</p></div><div className="planner-layout"><div className="idea-tabs" role="tablist" aria-label="Generated video ideas">{workspace.ideas.map((item, index) => <button key={item.title} id={`idea-tab-${index}`} className={activeIdea === index ? 'idea-tab active' : 'idea-tab'} onClick={() => { setActiveIdea(index); setShotListOpen(false) }} role="tab" aria-selected={activeIdea === index} aria-controls="creative-brief"><span>IDEA {String(index + 1).padStart(2, '0')}</span><strong>{item.title}</strong><small>{item.tag} · {item.length}</small><ChevronRight /></button>)}</div>{idea && <><article className="script-card" id="creative-brief" role="tabpanel" aria-labelledby={`idea-tab-${activeIdea}`}><div className="script-head"><span><WandSparkles size={16} /> GENERATED CREATIVE BRIEF</span><span className="platform">{workspace.brain.primaryPlatform.toUpperCase()}</span></div><div className="script-content"><span className="content-tag">{idea.tag}</span><h3>{idea.title}</h3><div className="hook"><small>OPENING HOOK</small><blockquote>{idea.hook}</blockquote></div><div className="beats">{idea.script.map((beat, index) => <div key={beat}><span>0{index + 1}</span><p>{beat}</p></div>)}</div><button className="button dark" onClick={() => setShotListOpen(!shotListOpen)} aria-expanded={shotListOpen}>View full shot list <ArrowUpRight size={17} /></button>{shotListOpen && <div className="detail-panel shot-list"><div className="detail-heading"><span>FULL SHOT LIST</span><strong>{idea.length}</strong></div>{idea.shots.map((shot, index) => <div className="shot" key={shot}><span>0{index + 1}</span><div><strong>{shot}</strong></div></div>)}</div>}</div></article><article className="score-card"><div className="score-head"><Target size={18} /><span>PERFORMANCE PREDICTOR</span></div><div className="score-ring" style={{ '--score': idea.score } as CSSProperties}><strong>{idea.score}</strong><span>/ 100</span></div><h3>{idea.score >= 88 ? 'High breakout potential' : 'Strong format fit'}</h3><p>{idea.prediction}</p><div className="score-bars"><div><span>Hook strength</span><i><b style={{ width: `${idea.score + 2}%` }}></b></i><strong>{idea.score + 2}</strong></div><div><span>Audience fit</span><i><b style={{ width: `${idea.score}%` }}></b></i><strong>{idea.score}</strong></div><div><span>Trend timing</span><i><b style={{ width: `${idea.score - 4}%` }}></b></i><strong>{idea.score - 4}</strong></div></div></article></>}</div></section>
+          <section className="planner section-pad" id="planner"><div className="section-heading light"><div><p className="kicker">03 / VIDEO PLANNER</p><h2>From idea<br />to shoot plan.</h2></div><p>Choose a direction. Northstar gives the opening hook, the beats to film, the shot list, and a simple confidence signal.</p></div><div className="planner-layout"><div className="idea-tabs" role="tablist" aria-label="Generated video ideas">{workspace.ideas.map((item, index) => <button key={item.title} id={`idea-tab-${index}`} className={activeIdea === index ? 'idea-tab active' : 'idea-tab'} onClick={() => { setActiveIdea(index); setShotListOpen(false); workspaceRequest('PATCH', { workspace, taskStatusOverrides, activeIdea: index }).then((result: unknown) => setWorkspacePersisted(Boolean((result as { persisted?: boolean }).persisted))).catch(() => setWorkspacePersisted(false)) }} role="tab" aria-selected={activeIdea === index} aria-controls="creative-brief"><span>IDEA {String(index + 1).padStart(2, '0')}</span><strong>{item.title}</strong><small>{item.tag} · {item.length}</small><ChevronRight /></button>)}</div>{idea && <><article className="script-card" id="creative-brief" role="tabpanel" aria-labelledby={`idea-tab-${activeIdea}`}><div className="script-head"><span><WandSparkles size={16} /> GENERATED CREATIVE BRIEF</span><span className="platform">{workspace.brain.primaryPlatform.toUpperCase()}</span></div><div className="script-content"><span className="content-tag">{idea.tag}</span><h3>{idea.title}</h3><div className="hook"><small>OPENING HOOK</small><blockquote>{idea.hook}</blockquote></div><div className="beats">{idea.script.map((beat, index) => <div key={beat}><span>0{index + 1}</span><p>{beat}</p></div>)}</div><button className="button dark" onClick={() => setShotListOpen(!shotListOpen)} aria-expanded={shotListOpen}>View full shot list <ArrowUpRight size={17} /></button>{shotListOpen && <div className="detail-panel shot-list"><div className="detail-heading"><span>FULL SHOT LIST</span><strong>{idea.length}</strong></div>{idea.shots.map((shot, index) => <div className="shot" key={shot}><span>0{index + 1}</span><div><strong>{shot}</strong></div></div>)}</div>}</div></article><article className="score-card"><div className="score-label"><Target size={16} /> PERFORMANCE PREDICTOR</div><div className="score-ring" style={{ '--score': `${idea.score * 3.6}deg` } as CSSProperties}><strong>{idea.score}</strong><span>/ 100</span></div><h3>{idea.score >= 88 ? 'High breakout potential' : 'Strong test candidate'}</h3><p>{idea.prediction}</p><div className="score-bars"><div><span>Hook strength</span><i><b style={{ width: `${idea.score + 2}%` }}></b></i><strong>{Math.min(99, idea.score + 2)}</strong></div><div><span>Audience fit</span><i><b style={{ width: `${idea.score}%` }}></b></i><strong>{idea.score}</strong></div><div><span>Trend timing</span><i><b style={{ width: `${Math.max(72, idea.score - 4)}%` }}></b></i><strong>{Math.max(72, idea.score - 4)}</strong></div></div></article></>}</div></section>
 
           <section className="audience section-pad"><div className="section-heading compact"><div><p className="kicker">04 / AUDIENCE INTELLIGENCE</p><h2>Turn attention into<br />useful direction.</h2></div><p>Audience needs derived from the creator’s niche, positioning, and monetization goal.</p></div><div className="audience-grid"><article className="panel conversation-card"><div className="panel-title"><Users size={18} /><span>AUDIENCE NEED MAP</span><small>BETA MODEL</small></div><h3>Your audience is asking for…</h3>{workspace.audience.map((item) => <div className="need" key={item.need}><span>{item.need}</span><div><i style={{ width: `${item.share}%` }}></i></div><strong>{item.share}%</strong></div>)}</article><article className="panel quote-card"><span className="quote-mark">“</span><blockquote>{workspace.brain.positioning}</blockquote><div className="quote-meta"><div className="tiny-avatar">NS</div><span>Strategic opportunity<br /><strong>{workspace.brain.contentPillars[0]}</strong></span></div><div className="sentiment"><span>VOICE MATCH</span><strong>91%</strong><small>based on onboarding inputs</small></div></article></div></section>
 
