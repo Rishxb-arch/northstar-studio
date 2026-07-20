@@ -1,9 +1,10 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import {
-  ArrowUpRight, BrainCircuit, CalendarDays, Check, ChevronRight, CircleCheck,
-  Database, Heart, Menu, Radar, RotateCcw, Search, Sparkles, Target,
+  ArrowUpRight, BrainCircuit, Check, ChevronRight, CircleCheck,
+  ClipboardCheck, Copy, Database, Menu, RotateCcw, Search, Sparkles, Target,
   TrendingUp, Users, WandSparkles, X, Zap,
 } from 'lucide-react'
+import { buildBriefExport, createProductionPlan, updateSprintStatus, type SprintStatus } from './product'
 
 type Platform = 'Instagram' | 'TikTok' | 'Both'
 
@@ -194,6 +195,8 @@ function App() {
   const [applicationDuplicate, setApplicationDuplicate] = useState(false)
   const [applicationSubmitting, setApplicationSubmitting] = useState(false)
   const [leadCount, setLeadCount] = useState(readLeadCount)
+  const [taskStatusOverrides, setTaskStatusOverrides] = useState<Record<string, SprintStatus>>({})
+  const [briefCopied, setBriefCopied] = useState(false)
 
   const updateInput = (field: keyof CreatorInputs, value: string) => setInputs((current) => ({ ...current, [field]: value }))
 
@@ -204,6 +207,8 @@ function App() {
     setWorkspace(next)
     setActiveIdea(0)
     setShotListOpen(false)
+    setTaskStatusOverrides({})
+    setBriefCopied(false)
     requestAnimationFrame(() => document.getElementById('intelligence')?.scrollIntoView({ behavior: 'smooth' }))
   }
 
@@ -213,6 +218,8 @@ function App() {
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify(next))
     setWorkspace(next)
     setActiveIdea(0)
+    setTaskStatusOverrides({})
+    setBriefCopied(false)
   }
 
   const resetWorkspace = () => {
@@ -221,6 +228,8 @@ function App() {
     setWorkspace(null)
     setActiveIdea(0)
     setShotListOpen(false)
+    setTaskStatusOverrides({})
+    setBriefCopied(false)
   }
 
   const submitApplication = async (event: FormEvent<HTMLFormElement>) => {
@@ -267,6 +276,34 @@ function App() {
   }
 
   const idea = workspace?.ideas[activeIdea]
+  const productionPlan = workspace ? Object.entries(taskStatusOverrides).reduce(
+    (plan, [taskId, status]) => updateSprintStatus(plan, taskId, status),
+    createProductionPlan(workspace, activeIdea),
+  ) : null
+
+  const toggleSprintTask = (taskId: string, nextStatus: SprintStatus) => {
+    setTaskStatusOverrides((current) => ({ ...current, [taskId]: nextStatus }))
+  }
+
+  const copyCurrentBrief = async () => {
+    if (!workspace || !productionPlan) return
+    const exportText = buildBriefExport(workspace, productionPlan)
+    try {
+      await navigator.clipboard.writeText(exportText)
+    } catch {
+      const fallback = document.createElement('textarea')
+      fallback.value = exportText
+      fallback.setAttribute('readonly', '')
+      fallback.style.position = 'fixed'
+      fallback.style.opacity = '0'
+      document.body.appendChild(fallback)
+      fallback.select()
+      document.execCommand('copy')
+      document.body.removeChild(fallback)
+    }
+    setBriefCopied(true)
+    window.setTimeout(() => setBriefCopied(false), 1600)
+  }
 
   return (
     <div className="app-shell">
@@ -346,7 +383,7 @@ function App() {
 
           <section className="deals section-pad" id="deals"><div className="deals-copy"><p className="kicker">05 / BRAND FIT</p><h2>Partners that fit<br /><em>the business goal.</em></h2><p>Suggestions use your selected categories and content style to create partnership angles.</p><ul><li><CircleCheck /> Brand-fit scoring</li><li><CircleCheck /> Campaign concept</li><li><CircleCheck /> Goal alignment</li></ul></div><div className="deal-list">{workspace.deals.length ? workspace.deals.map((deal) => <article className="deal-card compact-deal" key={deal.brand}><div className="deal-head"><span>SUGGESTED PARTNER</span><small>BETA MATCH</small></div><div className="brand-row"><div className="brand-logo">{deal.brand[0]}</div><div><h3>{deal.brand}</h3><p>{deal.category}</p></div><span className="fit">{deal.fit}% FIT</span></div><div className="agent-rec"><div><Sparkles size={16} /><span>CAMPAIGN ANGLE</span></div><p>{deal.concept}</p></div></article>) : <article className="deal-card compact-deal"><div className="brand-row"><p>Add brand categories in onboarding to generate deal suggestions.</p></div></article>}</div></section>
 
-          <section className="workflow section-pad"><div className="section-heading compact"><div><p className="kicker">06 / WEEKLY SPRINT</p><h2>A week built around<br />your creator brain.</h2></div><p>A Monday–Friday execution plan generated from your niche, platform, style, and monetization goal.</p></div><div className="week-grid">{workspace.sprint.map((day, index) => <article key={day.day} className={index === 0 ? 'day active' : 'day'}><span>{day.day}</span><div className="day-icon">{index === 0 ? <Radar /> : index === 1 ? <WandSparkles /> : index === 2 ? <CalendarDays /> : index === 3 ? <Heart /> : <TrendingUp />}</div><h3>{day.focus}</h3><p>{day.task}</p>{index === 0 && <small>START HERE</small>}</article>)}</div></section>
+          <section className="workflow product-workspace section-pad"><div className="section-heading compact"><div><p className="kicker">06 / PRODUCTION WORKSPACE</p><h2>Turn the plan into<br />published work.</h2></div><p>This is the first real product layer: track the sprint, keep the active brief in context, and export a creator-ready production doc.</p></div>{productionPlan && <div className="product-grid"><article className="product-panel sprint-panel"><div className="product-panel-head"><div><span>WEEKLY SPRINT</span><strong>{productionPlan.metrics.progress}% complete</strong></div><div className="progress-pill">{productionPlan.metrics.done}/{productionPlan.metrics.planned} done</div></div><div className="task-list">{productionPlan.tasks.map((task, index) => <button key={task.id} type="button" className={`task-row ${task.status}`} onClick={() => toggleSprintTask(task.id, task.status === 'done' ? 'todo' : 'done')}><span className="task-check">{task.status === 'done' ? <Check size={16} /> : String(index + 1).padStart(2, '0')}</span><div><small>{task.day} · {task.focus}</small><strong>{task.task}</strong></div><em>{task.status === 'next' ? 'Next up' : task.status}</em></button>)}</div></article><article className="product-panel active-brief-panel"><div className="product-panel-head"><div><span>ACTIVE BRIEF</span><strong>{productionPlan.selectedIdeaTitle}</strong></div><button className="export-button" type="button" onClick={copyCurrentBrief}>{briefCopied ? <ClipboardCheck size={16} /> : <Copy size={16} />}{briefCopied ? 'Copied' : 'Copy brief'}</button></div>{idea && <div className="brief-snapshot"><div><small>OPENING HOOK</small><p>{idea.hook}</p></div><div className="brief-meta"><span>{workspace.brain.primaryPlatform}</span><span>{idea.length}</span><span>{idea.score}/100</span></div><div className="shot-stack">{idea.shots.slice(0, 3).map((shot) => <span key={shot}>{shot}</span>)}</div></div>}</article></div>}</section>
         </>}
 
         <section className="beta" id="beta"><div className="beta-glow"></div><p className="kicker">PRIVATE BETA / 4-WEEK SPRINT</p><h2>Your next level isn’t<br />more hustle. <em>It’s leverage.</em></h2><p>Join a small cohort of Instagram/TikTok creators testing Northstar Studio. Applications now save to the real waitlist database.</p>{applicationSent ? <div className="success" role="status"><Check /> {applicationDuplicate ? 'You’re already on the waitlist.' : `Application saved. You’re local lead #${leadCount}.`}</div> : <form className="beta-form" onSubmit={submitApplication}><div className="form-grid"><label><span>Name</span><input name="name" type="text" autoComplete="name" placeholder="Amara Singh" required /></label><label><span>Creator handle</span><input name="handle" type="text" autoComplete="username" placeholder="@amaraglow" /></label><label><span>Email</span><input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label><label><span>Content niche</span><input name="niche" type="text" placeholder="Beauty & skincare" required /></label><label className="span-two"><span>Primary platform</span><select name="platform" defaultValue="Instagram/TikTok"><option>Instagram</option><option>TikTok</option><option>Instagram/TikTok</option><option>YouTube Shorts</option></select></label></div>{applicationError && <div className="form-error" role="alert">{applicationError}</div>}<button className="button primary beta-button" type="submit" disabled={applicationSubmitting}>{applicationSubmitting ? 'Saving…' : 'Join the beta waitlist'} <ArrowUpRight size={18} /></button></form>}<div className="beta-details"><span>✓ No credit card</span><span>✓ Saved to Supabase waitlist</span><span className="lead-count">{leadCount} local {leadCount === 1 ? 'submission' : 'submissions'}</span></div></section>
